@@ -1,7 +1,7 @@
 {
-  "name": "ระบบบริหารจัดการข้อมูลองค์กร",
-  "short_name": "DataApp",
-  "description": "เว็บแอปพลิเคชันสำหรับการบันทึกและจัดการข้อมูลผ่านระบบ Google Apps Script",
+  "name": "RP1204",
+  "short_name": "RP1204",
+  "description": "เว็บแจ้งซ่อม",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
