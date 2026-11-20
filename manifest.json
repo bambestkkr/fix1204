@@ -1,20 +1,25 @@
 {
-  "name": "รายงานอุปกรณ์มีปัญหา1204",
-  "short_name": "RP1204",
-  "start_url": "./",
+  "name": "แจ้งซ่อม1204",
+  "short_name": "ReportFix",
+  "description": "แจ้งซ่อม",
+  "start_url": "./index.html",
+  "scope": "./",
   "display": "standalone",
+  "orientation": "portrait",
   "background_color": "#ffffff",
-  "theme_color": "#2e7d32",
+  "theme_color": "#1a73e8",
   "icons": [
     {
-      "src": "icon.png",
+      "src": "./icon-192x192.png",
       "sizes": "192x192",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any maskable"
     },
     {
-      "src": "icon.png",
+      "src": "./icon-512x512.png",
       "sizes": "512x512",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any maskable"
     }
   ]
 }
