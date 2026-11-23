@@ -443,25 +443,17 @@
         let isAdminLoggedIn = false;
         let autoSyncTimer = null;
         let isSyncingNow = false;
+        let lastWriteTimestamp = 0;
 
         window.onload = function() {
             initPCSelectOptions();
-            initClassPeriods();
-            renderSubjectDropdown();
-            renderChecklistCheckboxes();
-            setTodayDate();
-            loadGoogleConfigInputs();
-            updateStudentCount();
-            if (googleConfig.scriptUrl) {
-                fetchFromGoogleSheet(false);
-                startAutoRealtimeSync();
-            }
-        };
-
+// ... existing code ... -->
         // ระบบดึงข้อมูลอัตโนมัติแบบ Real-Time Polling ทุก 15 วินาที
         function startAutoRealtimeSync() {
             if (autoSyncTimer) clearInterval(autoSyncTimer);
             autoSyncTimer = setInterval(() => {
+                // ข้ามการดึงข้อมูลอัตโนมัติชั่วคราวหากเพิ่งมีการบันทึกข้อมูลภายใน 10 วินาทีที่ผ่านมา
+                if (Date.now() - lastWriteTimestamp < 10000) return;
                 if (googleConfig.scriptUrl && !isSyncingNow && !document.hidden) {
                     fetchFromGoogleSheet(false, true);
                 }
@@ -471,6 +463,7 @@
         // เชื่อมต่อ API Google Apps Script (GET)
         async function fetchFromGoogleSheet(showNotify = false, isSilent = false) {
             if (!googleConfig.scriptUrl || isSyncingNow) return;
+            const requestStartTime = Date.now();
             isSyncingNow = true;
             const badge = document.getElementById('sync-status-badge');
             if (!isSilent) badge.innerText = "กำลังซิงค์ข้อมูล...";
@@ -485,69 +478,17 @@
                     redirect: 'follow'
                 });
                 const json = await res.json();
+                // หากมีการกดบันทึก/แก้ไขระหว่างที่กำลังโหลด GET อยู่ ให้ยกเลิกการเขียนทับข้อมูลใหม่
+                if (isSilent && lastWriteTimestamp > requestStartTime) {
+                    return;
+                }
                 if (json.status === 'success' && json.data) {
                     if (json.data.students && json.data.students.length > 0) {
-                        studentsDB = json.data.students;
-                        localStorage.setItem('lab_students', JSON.stringify(studentsDB));
-                    }
-                    if (json.data.issues && json.data.issues.length > 0) {
-                        issueItemsDB = json.data.issues;
-                        localStorage.setItem('lab_issues', JSON.stringify(issueItemsDB));
-                    }
-                    if (json.data.subjects && json.data.subjects.length > 0) {
-                        subjectsDB = json.data.subjects;
-                        localStorage.setItem('lab_subjects', JSON.stringify(subjectsDB));
-                    }
-                    if (json.data.reports) {
-                        reportsDB = json.data.reports;
-                        localStorage.setItem('lab_reports', JSON.stringify(reportsDB));
-                    }
-                    if (json.data.config) {
-                        if (json.data.config.adminPassword) {
-                            adminPassword = String(json.data.config.adminPassword);
-                            localStorage.setItem('lab_admin_pass', adminPassword);
-                        }
-                        if (!googleConfig.sheetId && json.data.config.sheetId) googleConfig.sheetId = json.data.config.sheetId;
-                        if (!googleConfig.driveFolderId && json.data.config.driveFolderId) googleConfig.driveFolderId = json.data.config.driveFolderId;
-                        localStorage.setItem('lab_google_cfg', JSON.stringify(googleConfig));
-                        loadGoogleConfigInputs();
-                    }
-                    updateStudentCount();
-                    renderChecklistCheckboxes();
-                    renderSubjectDropdown();
-                    if (!document.getElementById('tab-reports').classList.contains('hidden')) {
-                        populateRoomFilter();
-                        renderReports();
-                    }
-                    if (!document.getElementById('tab-settings').classList.contains('hidden')) {
-                        renderSettingsIssueList();
-                        renderSettingsSubjectList();
-                    }
-                    badge.innerText = "🟢 Real-Time Google Sheet";
-                    if (showNotify) showModal("ซิงค์สำเร็จ", "ดึงข้อมูลล่าสุดจาก Google Sheets เรียบร้อยแล้ว");
-                } else {
-                    badge.innerText = "⚠️ ตรวจสอบ Sheet ID";
-                    if (showNotify) showModal("เกิดข้อผิดพลาด", json.message || "ไม่สามารถอ่านข้อมูลจาก Sheet ID ที่ระบุได้");
-                }
-            } catch (err) {
-                badge.innerText = "⚠️ ออฟไลน์ (Local)";
-                if (showNotify) showModal("ไม่สามารถเชื่อมต่อได้", "ตรวจสอบ Web App URL หรือการตั้งค่าสิทธิ์การเข้าถึง (Anyone)");
-            } finally {
-                isSyncingNow = false;
-            }
-        }
-
-        // แยกเฉพาะ ID กรณีผู้ใช้คัดลอกมาทั้ง URL ของ Google Sheet หรือ Google Drive Folder
-        function extractGoogleId(input) {
-            if (!input) return '';
-            const trimmed = input.trim();
-            const match = trimmed.match(/[-\w]{25,}/);
-            return match ? match[0] : trimmed;
-        }
-
+// ... existing code ... -->
         // ส่งข้อมูลไปยัง Google Apps Script แบบ Real-Time (POST)
         async function postToGoogleSheet(payload) {
             if (!googleConfig.scriptUrl) return { status: 'offline' };
+            lastWriteTimestamp = Date.now();
             const badge = document.getElementById('sync-status-badge');
             const prevBadgeText = badge.innerText;
             badge.innerText = "⏳ กำลังบันทึก Real-Time...";
@@ -567,6 +508,7 @@
                     body: JSON.stringify(enrichedPayload)
                 });
                 const json = await res.json();
+                lastWriteTimestamp = Date.now();
                 if (json && json.status === 'success') {
                     badge.innerText = "🟢 Real-Time Google Sheet";
                 } else {
@@ -583,700 +525,7 @@
         }
 
         function initPCSelectOptions() {
-            const pcSelect = document.getElementById('pc-number');
-            const filterPcSelect = document.getElementById('filter-pc');
-            pcSelect.innerHTML = '<option value="">-- เลือกหมายเลขเครื่อง --</option>';
-            filterPcSelect.innerHTML = '<option value="">ทุกเครื่อง (1-40)</option>';
-            for (let i = 1; i <= 40; i++) {
-                const label = `เครื่องที่ ${String(i).padStart(2, '0')}`;
-                pcSelect.innerHTML += `<option value="${label}">${label}</option>`;
-                filterPcSelect.innerHTML += `<option value="${label}">${label}</option>`;
-            }
-        }
-
-        function initClassPeriods() {
-            const periodSelect = document.getElementById('class-period');
-            const filterPeriodSelect = document.getElementById('filter-period');
-            periodSelect.innerHTML = '';
-            filterPeriodSelect.innerHTML = '<option value="">ทุกคาบเรียน</option>';
-
-            let startMinutes = 8 * 60 + 30;
-            for (let p = 1; p <= 9; p++) {
-                const endMinutes = startMinutes + 50;
-                const startStr = formatMinutesToTime(startMinutes);
-                const endStr = formatMinutesToTime(endMinutes);
-                const text = `คาบที่ ${p} (${startStr} - ${endStr} น.)`;
-                periodSelect.innerHTML += `<option value="${text}">${text}</option>`;
-                filterPeriodSelect.innerHTML += `<option value="${text}">${text}</option>`;
-                startMinutes = endMinutes;
-            }
-        }
-
-        function formatMinutesToTime(totalMins) {
-            const hrs = Math.floor(totalMins / 60);
-            const mins = totalMins % 60;
-            return `${String(hrs).padStart(2, '0')}:${String(mins).padStart(2, '0')}`;
-        }
-
-        function setTodayDate() {
-            document.getElementById('report-date').value = new Date().toISOString().split('T')[0];
-        }
-
-        function renderSubjectDropdown() {
-            const select = document.getElementById('subject-select');
-            select.innerHTML = '<option value="">-- เลือกรายวิชาที่เรียน --</option>';
-            subjectsDB.forEach(subj => {
-                select.innerHTML += `<option value="${subj}">${subj}</option>`;
-            });
-        }
-
-        function renderChecklistCheckboxes() {
-            const container = document.getElementById('checklist-items-container');
-            container.innerHTML = '';
-            issueItemsDB.forEach(item => {
-                container.innerHTML += `
-                    <label class="flex items-start gap-2.5 p-3 rounded-2xl border border-purple-100 bg-slate-50/50 hover:bg-purple-50/80 cursor-pointer transition">
-                        <input type="checkbox" name="issue-check" value="${item}" class="mt-0.5 w-4 h-4 text-purple-600 rounded border-purple-300 focus:ring-purple-400">
-                        <span class="text-sm text-slate-700 leading-snug">${item}</span>
-                    </label>
-                `;
-            });
-        }
-
-        function switchTab(tabName) {
-            if ((tabName === 'reports' || tabName === 'settings') && !isAdminLoggedIn) {
-                openAdminLogin();
-                return;
-            }
-            const tabs = ['checkin', 'reports', 'settings'];
-            tabs.forEach(t => {
-                document.getElementById(`tab-${t}`).classList.add('hidden');
-                const navBtn = document.getElementById(`nav-${t}`);
-                navBtn.classList.remove('bg-white', 'text-indigo-600', 'shadow-sm');
-                navBtn.classList.add('text-white', 'hover:bg-white/20');
-            });
-
-            document.getElementById(`tab-${tabName}`).classList.remove('hidden');
-            const activeNav = document.getElementById(`nav-${tabName}`);
-            activeNav.classList.add('bg-white', 'text-indigo-600', 'shadow-sm');
-            activeNav.classList.remove('text-white', 'hover:bg-white/20');
-
-            if (tabName === 'reports') {
-                populateRoomFilter();
-                renderReports();
-            }
-            if (tabName === 'settings') {
-                renderSettingsIssueList();
-                renderSettingsSubjectList();
-            }
-        }
-
-        function openAdminLogin() {
-            showPromptModal("เข้าสู่ระบบผู้ดูแลระบบ (Admin)", "กรุณากรอกรหัสผ่านผู้ดูแลระบบ:", "", (pass) => {
-                if (pass === adminPassword) {
-                    isAdminLoggedIn = true;
-                    document.getElementById('nav-reports').classList.remove('hidden');
-                    document.getElementById('nav-settings').classList.remove('hidden');
-                    document.getElementById('nav-admin-login').classList.add('hidden');
-                    document.getElementById('nav-admin-logout').classList.remove('hidden');
-                    switchTab('reports');
-                } else {
-                    showModal("รหัสผ่านไม่ถูกต้อง", "รหัสผ่านผู้ดูแลระบบไม่ถูกต้อง กรุณาลองใหม่อีกครั้ง");
-                }
-            }, "password");
-        }
-
-        function logoutAdmin() {
-            isAdminLoggedIn = false;
-            document.getElementById('nav-reports').classList.add('hidden');
-            document.getElementById('nav-settings').classList.add('hidden');
-            document.getElementById('nav-admin-login').classList.remove('hidden');
-            document.getElementById('nav-admin-logout').classList.add('hidden');
-            switchTab('checkin');
-            showModal("ออกจากระบบ", "ออกจากโหมดผู้ดูแลระบบเรียบร้อยแล้ว");
-        }
-
-        async function changeAdminPassword() {
-            const oldPass = document.getElementById('old-admin-pass').value;
-            const newPass = document.getElementById('new-admin-pass').value.trim();
-            const confirmPass = document.getElementById('confirm-admin-pass').value.trim();
-
-            if (oldPass !== adminPassword) {
-                showModal("ข้อผิดพลาด", "รหัสผ่านเดิมไม่ถูกต้อง");
-                return;
-            }
-            if (!newPass) {
-                showModal("ข้อผิดพลาด", "กรุณากำหนดรหัสผ่านใหม่");
-                return;
-            }
-            if (newPass !== confirmPass) {
-                showModal("ข้อผิดพลาด", "รหัสผ่านใหม่และการยืนยันรหัสผ่านไม่ตรงกัน");
-                return;
-            }
-
-            adminPassword = newPass;
-            localStorage.setItem('lab_admin_pass', newPass);
-            document.getElementById('old-admin-pass').value = '';
-            document.getElementById('new-admin-pass').value = '';
-            document.getElementById('confirm-admin-pass').value = '';
-            await syncMasterDataToSheet(false);
-            showModal("สำเร็จ", "เปลี่ยนรหัสผ่านผู้ดูแลระบบและบันทึกลง Google Sheet เรียบร้อยแล้ว");
-        }
-
-        function printReportA4() {
-            const tableBodyHtml = document.getElementById('report-table-body').innerHTML;
-            const printWin = window.open('', '_blank', 'width=900,height=700');
-            if (printWin) {
-                printWin.document.write(`
-                    <!DOCTYPE html>
-                    <html lang="th">
-                    <head>
-                        <meta charset="UTF-8">
-                        <title>พิมพ์รายงานการตรวจสอบและแจ้งซ่อมอุปกรณ์ห้องปฏิบัติการคอมพิวเตอร์</title>
-                        <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;600;700&display=swap" rel="stylesheet">
-                        <style>
-                            @page { size: A4 portrait; margin: 15mm; }
-                            body { font-family: 'Sarabun', sans-serif; color: #000; font-size: 13px; line-height: 1.4; }
-                            .header { text-align: center; border-bottom: 2px solid #000; padding-bottom: 10px; margin-bottom: 15px; }
-                            .header h1 { font-size: 18px; margin: 0; font-weight: 700; }
-                            .header p { font-size: 13px; margin: 4px 0 0; }
-                            table { width: 100%; border-collapse: collapse; margin-bottom: 25px; }
-                            th, td { border: 1px solid #475569; padding: 6px 8px; text-align: left; vertical-align: top; }
-                            th { background-color: #f1f5f9; font-weight: 700; }
-                            .no-print { display: none !important; }
-                            .signatures { display: flex; justify-content: flex-end; margin-top: 40px; text-align: center; }
-                            .sig-box { width: 45%; }
-                        </style>
-                    </head>
-                    <body>
-                        <div class="header">
-                            <h1>แบบรายงานการตรวจสอบและแจ้งซ่อมอุปกรณ์ห้องปฏิบัติการคอมพิวเตอร์ 1204</h1>
-                            <p>กลุ่มสาระการเรียนรู้วิทยาศาสตร์และเทคโนโลยี | จำนวนเครื่องคอมพิวเตอร์ 40 เครื่อง</p>
-                        </div>
-                        <table>
-                            <thead>
-                                <tr>
-                                    <th>วันที่ / คาบเรียน</th>
-                                    <th>หมายเลขเครื่อง</th>
-                                    <th>ผู้แจ้ง (รหัส)</th>
-                                    <th>ชั้น/เลขที่</th>
-                                    <th>ปัญหาที่พบ</th>
-                                    <th>รายละเอียดเพิ่มเติม</th>
-                                    <th>สถานะ / ผลการดำเนินการ</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                ${tableBodyHtml}
-                            </tbody>
-                        </table>
-                        <div class="signatures">
-                            <div class="sig-box">
-                                <p>ลงชื่อ......................................................ผู้รายงาน</p>
-                                <p>(......................................................)</p>
-                                <p>ครูผู้ดูแลห้องปฏิบัติการคอมพิวเตอร์</p>
-                            </div>
-                        </div>
-                        <script>
-                            window.onload = function() {
-                                window.focus();
-                                window.print();
-                            };
-                        <\/script>
-                    </body>
-                    </html>
-                `);
-                printWin.document.close();
-            } else {
-                window.print();
-            }
-        }
-
-        function lookupStudent() {
-            const idInput = document.getElementById('student-id-input').value.trim();
-            if (!idInput) {
-                showModal("แจ้งเตือน", "กรุณากรอกรหัสประจำตัวนักเรียนก่อนค้นหา");
-                return;
-            }
-            const found = studentsDB.find(s => s.id === idInput);
-            if (found) {
-                selectedStudent = found;
-                document.getElementById('disp-student-name').innerText = `${found.name} (รหัส ${found.id})`;
-                document.getElementById('disp-student-class').innerText = `ชั้น ${found.room} เลขที่ ${found.no}`;
-                document.getElementById('student-info-card').classList.remove('hidden');
-            } else {
-                selectedStudent = null;
-                document.getElementById('student-info-card').classList.add('hidden');
-                showModal("ไม่พบข้อมูล", `ไม่พบรหัสประจำตัว "${idInput}" ในฐานข้อมูล กรุณาตรวจสอบหรือติดต่อครูผู้สอน`);
-            }
-        }
-
-        async function startCamera() {
-            try {
-                webcamStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" }, audio: false });
-                const video = document.getElementById('webcam-video');
-                video.srcObject = webcamStream;
-                video.classList.remove('hidden');
-                document.getElementById('captured-photo').classList.add('hidden');
-                document.getElementById('camera-placeholder').classList.add('hidden');
-                document.getElementById('btn-start-cam').classList.add('hidden');
-                document.getElementById('btn-capture-cam').classList.remove('hidden');
-                document.getElementById('btn-retake-cam').classList.add('hidden');
-                document.getElementById('camera-status').innerText = "กำลังเปิดกล้อง...";
-            } catch (err) {
-                showModal("ไม่สามารถเปิดกล้องได้", "กรุณาอนุญาตการเข้าถึงกล้องในเบราว์เซอร์ หรือตรวจสอบอุปกรณ์กล้องของเครื่อง");
-            }
-        }
-
-        function capturePhoto() {
-            const video = document.getElementById('webcam-video');
-            const canvas = document.createElement('canvas');
-            canvas.width = 480;
-            canvas.height = 360;
-            const ctx = canvas.getContext('2d');
-            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-            currentSnapshotData = canvas.toDataURL('image/jpeg', 0.7);
-
-            const img = document.getElementById('captured-photo');
-            img.src = currentSnapshotData;
-            img.classList.remove('hidden');
-            video.classList.add('hidden');
-
-            stopWebcamStream();
-            document.getElementById('btn-capture-cam').classList.add('hidden');
-            document.getElementById('btn-retake-cam').classList.remove('hidden');
-            document.getElementById('camera-status').innerText = "บันทึกภาพยืนยันแล้ว";
-        }
-
-        function retakePhoto() {
-            currentSnapshotData = null;
-            startCamera();
-        }
-
-        function stopWebcamStream() {
-            if (webcamStream) {
-                webcamStream.getTracks().forEach(track => track.stop());
-                webcamStream = null;
-            }
-        }
-
-        function handleEvidenceUpload(event) {
-            const files = Array.from(event.target.files);
-            if (!files.length) return;
-
-            if (currentEvidenceImages.length + files.length > 3) {
-                showModal("เกินจำนวนที่กำหนด", "สามารถแนบภาพถ่ายอุปกรณ์ที่ชำรุดได้สูงสุด 3 ภาพเท่านั้น");
-                event.target.value = "";
-                return;
-            }
-
-            files.forEach(file => {
-                const reader = new FileReader();
-                reader.onload = function(e) {
-                    const img = new Image();
-                    img.onload = function() {
-                        const canvas = document.createElement('canvas');
-                        const maxW = 600;
-                        const scale = Math.min(1, maxW / img.width);
-                        canvas.width = img.width * scale;
-                        canvas.height = img.height * scale;
-                        const ctx = canvas.getContext('2d');
-                        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-                        currentEvidenceImages.push(canvas.toDataURL('image/jpeg', 0.7));
-                        renderEvidencePreviews();
-                    };
-                    img.src = e.target.result;
-                };
-                reader.readAsDataURL(file);
-            });
-            event.target.value = "";
-        }
-
-        function renderEvidencePreviews() {
-            const container = document.getElementById('evidence-preview-container');
-            document.getElementById('evidence-count-badge').innerText = `${currentEvidenceImages.length} / 3 ภาพ`;
-            container.innerHTML = '';
-            currentEvidenceImages.forEach((src, index) => {
-                container.innerHTML += `
-                    <div class="relative group rounded-xl overflow-hidden border border-slate-300 aspect-video bg-slate-200">
-                        <img src="${src}" class="w-full h-full object-cover">
-                        <button type="button" onclick="removeEvidenceImage(${index})" class="absolute top-1 right-1 bg-rose-600 text-white rounded-full w-6 h-6 text-xs flex items-center justify-center shadow hover:bg-rose-700">✕</button>
-                    </div>
-                `;
-            });
-        }
-
-        function removeEvidenceImage(idx) {
-            currentEvidenceImages.splice(idx, 1);
-            renderEvidencePreviews();
-        }
-
-        async function submitRepairReport() {
-            if (!selectedStudent) {
-                showModal("ข้อมูลไม่ครบถ้วน", "กรุณากรอกรหัสประจำตัวนักเรียนและกดค้นหาเพื่อยืนยันตัวตน");
-                return;
-            }
-            if (!currentSnapshotData) {
-                showModal("ข้อมูลไม่ครบถ้วน", "กรุณาถ่ายภาพยืนยันตัวตนผู้แจ้งผ่านกล้องก่อนส่งรายงาน");
-                return;
-            }
-
-            const pcNumber = document.getElementById('pc-number').value;
-            const reportDate = document.getElementById('report-date').value;
-            const period = document.getElementById('class-period').value;
-            const subject = document.getElementById('subject-select').value;
-            const notes = document.getElementById('issue-notes').value.trim();
-            const checkedIssues = Array.from(document.querySelectorAll('input[name="issue-check"]:checked')).map(cb => cb.value);
-
-            if (!pcNumber || !reportDate || !subject) {
-                showModal("ข้อมูลไม่ครบถ้วน", "กรุณาเลือกหมายเลขเครื่อง วันที่ และรายวิชาที่เรียนให้ครบถ้วน");
-                return;
-            }
-            if (checkedIssues.length === 0) {
-                showModal("ข้อมูลไม่ครบถ้วน", "กรุณาเลือกรายการปัญหาหรืออุปกรณ์ที่ชำรุดอย่างน้อย 1 รายการ");
-                return;
-            }
-
-            const btnSubmit = document.getElementById('btn-submit-report');
-            btnSubmit.disabled = true;
-            btnSubmit.innerText = "⏳ กำลังบันทึกและอัปโหลดภาพ...";
-
-            const newReport = {
-                id: Date.now(),
-                date: reportDate,
-                period: period,
-                subject: subject,
-                pc: pcNumber,
-                studentId: selectedStudent.id,
-                studentName: selectedStudent.name,
-                room: selectedStudent.room,
-                no: selectedStudent.no,
-                issues: checkedIssues,
-                notes: notes || "-",
-                status: "ยังไม่ได้ดำเนินการ",
-                resolver: "",
-                actionNote: "",
-                actionUpdatedAt: "",
-                selfie: currentSnapshotData,
-                evidenceImages: [...currentEvidenceImages]
-            };
-
-            // ส่งขึ้น Google Sheets & Google Drive แบบ Real-Time
-            const apiRes = await postToGoogleSheet({ action: 'submitReport', data: newReport });
-            const savedReport = (apiRes && apiRes.report) ? apiRes.report : newReport;
-
-            reportsDB.unshift(savedReport);
-            localStorage.setItem('lab_reports', JSON.stringify(reportsDB));
-
-            btnSubmit.disabled = false;
-            btnSubmit.innerText = "📨 ส่งรายงานแจ้งซ่อม";
-
-            if (!googleConfig.scriptUrl) {
-                showModal("ส่งรายงานสำเร็จ (ออฟไลน์)", `บันทึกข้อมูลแจ้งซ่อมสำหรับ ${pcNumber} ในเครื่องเรียบร้อยแล้ว (ยังไม่ได้เชื่อมต่อ Google Sheet)`);
-            } else if (apiRes && apiRes.status === 'success') {
-                showModal("บันทึก Real-Time สำเร็จ", `ส่งข้อมูลแจ้งซ่อมและอัปโหลดภาพหลักฐานสำหรับ ${pcNumber} ลง Google Sheet และ Google Drive เรียบร้อยแล้ว`);
-            } else {
-                showModal("บันทึกสำรองในเครื่องแล้ว", `ไม่สามารถส่งขึ้น Google Sheet ได้ในขณะนี้ (${apiRes?.message || 'ตรวจสอบการเชื่อมต่อ'}) ระบบได้บันทึกสำรองไว้ในเครื่องแล้ว`);
-            }
-            resetCheckinForm();
-        }
-
-        function resetCheckinForm() {
-            selectedStudent = null;
-            currentSnapshotData = null;
-            currentEvidenceImages = [];
-            stopWebcamStream();
-
-            document.getElementById('student-id-input').value = '';
-            document.getElementById('student-info-card').classList.add('hidden');
-            document.getElementById('webcam-video').classList.add('hidden');
-            document.getElementById('captured-photo').classList.add('hidden');
-            document.getElementById('camera-placeholder').classList.remove('hidden');
-            document.getElementById('btn-start-cam').classList.remove('hidden');
-            document.getElementById('btn-capture-cam').classList.add('hidden');
-            document.getElementById('btn-retake-cam').classList.add('hidden');
-            document.getElementById('camera-status').innerText = "พร้อมใช้งาน";
-
-            document.getElementById('pc-number').value = '';
-            document.getElementById('subject-select').value = '';
-            document.getElementById('issue-notes').value = '';
-            document.querySelectorAll('input[name="issue-check"]').forEach(cb => cb.checked = false);
-            renderEvidencePreviews();
-        }
-
-        function populateRoomFilter() {
-            const roomSelect = document.getElementById('filter-room');
-            const currentVal = roomSelect.value;
-            const rooms = [...new Set(reportsDB.map(r => r.room))].sort();
-            roomSelect.innerHTML = '<option value="">ทุกห้องเรียน</option>';
-            rooms.forEach(rm => {
-                roomSelect.innerHTML += `<option value="${rm}">${rm}</option>`;
-            });
-            roomSelect.value = currentVal;
-        }
-
-        function clearReportFilters() {
-            document.getElementById('filter-date-start').value = '';
-            document.getElementById('filter-date-end').value = '';
-            document.getElementById('filter-room').value = '';
-            document.getElementById('filter-pc').value = '';
-            document.getElementById('filter-period').value = '';
-            document.getElementById('filter-status').value = '';
-            renderReports();
-        }
-
-        function filterByClickedDate(dateStr) {
-            document.getElementById('filter-date-start').value = dateStr;
-            document.getElementById('filter-date-end').value = dateStr;
-            renderReports();
-        }
-
-        function renderReports() {
-            const tbody = document.getElementById('report-table-body');
-            const dStart = document.getElementById('filter-date-start').value;
-            const dEnd = document.getElementById('filter-date-end').value;
-            const fRoom = document.getElementById('filter-room').value;
-            const fPc = document.getElementById('filter-pc').value;
-            const fPeriod = document.getElementById('filter-period').value;
-            const fStatus = document.getElementById('filter-status').value;
-
-            const filtered = reportsDB.filter(r => {
-                const currentStatus = r.status || 'ยังไม่ได้ดำเนินการ';
-                if (dStart && r.date < dStart) return false;
-                if (dEnd && r.date > dEnd) return false;
-                if (fRoom && r.room !== fRoom) return false;
-                if (fPc && r.pc !== fPc) return false;
-                if (fPeriod && r.period !== fPeriod) return false;
-                if (fStatus && currentStatus !== fStatus) return false;
-                return true;
-            });
-
-            if (filtered.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="9" class="py-8 text-center text-slate-400">ไม่พบรายการแจ้งซ่อมตามเงื่อนไขที่เลือก</td></tr>`;
-                return;
-            }
-
-            tbody.innerHTML = '';
-            filtered.forEach(r => {
-                const currentStatus = r.status || 'ยังไม่ได้ดำเนินการ';
-                let badgeClass = 'bg-rose-100 text-rose-800 border-rose-200';
-                let statusLabel = '🔴 ยังไม่ได้ดำเนินการ';
-                if (currentStatus === 'รอดำเนินการ') {
-                    badgeClass = 'bg-amber-100 text-amber-800 border-amber-200';
-                    statusLabel = '🟡 รอดำเนินการ (รับเรื่องแล้ว)';
-                } else if (currentStatus === 'ดำเนินการแล้ว') {
-                    badgeClass = 'bg-emerald-100 text-emerald-800 border-emerald-200';
-                    statusLabel = '🟢 ดำเนินการแล้ว';
-                }
-
-                const issuesHtml = r.issues.map(i => `• ${i}`).join('<br>');
-                const evidenceThumbs = (r.evidenceImages || []).map((imgSrc, i) => `
-                    <img src="${imgSrc}" onclick="openImageModal('${imgSrc}', 'หลักฐานอุปกรณ์ชำรุด (${r.pc}) ภาพที่ ${i+1}')" class="w-9 h-9 object-cover rounded border-2 border-rose-400 cursor-pointer hover:scale-110 transition" title="คลิกดูภาพอุปกรณ์ชำรุด">
-                `).join('');
-
-                tbody.innerHTML += `
-                    <tr class="hover:bg-slate-50">
-                        <td class="py-2.5 px-3">
-                            <button type="button" onclick="filterByClickedDate('${r.date}')" class="font-bold text-indigo-700 hover:text-pink-600 underline decoration-dotted underline-offset-4 cursor-pointer text-left" title="คลิกเพื่อกรองดูข้อมูลเฉพาะวันที่ ${r.date}">📅 ${r.date}</button>
-                            <div class="text-xs text-slate-500 mt-0.5">${r.period}</div>
-                            <div class="text-xs text-indigo-600">${r.subject}</div>
-                        </td>
-                        <td class="py-2.5 px-3 font-bold text-indigo-800 whitespace-nowrap">${r.pc}</td>
-                        <td class="py-2.5 px-3">
-                            <div class="font-medium">${r.studentName}</div>
-                            <div class="text-xs text-slate-500">รหัส: ${r.studentId}</div>
-                        </td>
-                        <td class="py-2.5 px-3 whitespace-nowrap">${r.room} / เลขที่ ${r.no}</td>
-                        <td class="py-2.5 px-3 text-rose-700 text-xs leading-relaxed">${issuesHtml}</td>
-                        <td class="py-2.5 px-3 text-slate-600 text-xs">${r.notes}</td>
-                        <td class="py-2.5 px-3">
-                            <span class="inline-block px-2.5 py-1 rounded-full text-xs font-bold border ${badgeClass}">${statusLabel}</span>
-                            ${r.resolver ? `<div class="text-xs text-indigo-800 font-semibold mt-1.5">👤 ผู้แก้ไข: ${r.resolver}</div>` : ''}
-                            ${r.actionNote ? `<div class="text-xs text-slate-700 mt-1 bg-slate-50 p-1.5 rounded-lg border border-slate-200"><strong>ผลแก้ไข:</strong> ${r.actionNote}</div>` : ''}
-                            ${r.actionUpdatedAt ? `<div class="text-[11px] text-slate-400 mt-0.5">อัปเดต: ${r.actionUpdatedAt}</div>` : ''}
-                        </td>
-                        <td class="py-2.5 px-3 no-print">
-                            <div class="flex flex-wrap gap-1.5 items-center">
-                                ${r.selfie ? `<img src="${r.selfie}" onclick="openImageModal('${r.selfie}', 'ภาพยืนยันตัวตน: ${r.studentName}')" class="w-9 h-9 object-cover rounded border-2 border-indigo-400 cursor-pointer hover:scale-110 transition" title="ภาพยืนยันตัวตนผู้แจ้ง">` : ''}
-                                ${evidenceThumbs}
-                            </div>
-                        </td>
-                        <td class="py-2.5 px-3 text-center no-print">
-                            <div class="flex flex-col gap-1.5 items-center">
-                                <button type="button" onclick="openStatusModal(${r.id})" class="w-full bg-indigo-100 text-indigo-700 hover:bg-indigo-200 text-xs font-bold px-2.5 py-1 rounded-xl transition whitespace-nowrap">📝 อัปเดตผล</button>
-                                <button type="button" onclick="deleteReport(${r.id})" class="w-full text-rose-500 hover:text-rose-700 text-xs font-medium px-2 py-1 rounded-xl hover:bg-rose-50 transition">ลบ</button>
-                            </div>
-                        </td>
-                    </tr>
-                `;
-            });
-        }
-
-        function openStatusModal(reportId) {
-            const report = reportsDB.find(r => r.id === reportId);
-            if (!report) return;
-            document.getElementById('status-report-id').value = report.id;
-            document.getElementById('status-modal-subtitle').innerText = `${report.pc} | วันที่ ${report.date} (${report.studentName})`;
-            document.getElementById('status-select').value = report.status || 'ยังไม่ได้ดำเนินการ';
-            document.getElementById('status-resolver').value = report.resolver || '';
-            document.getElementById('status-action-note').value = report.actionNote || '';
-            document.getElementById('status-modal').classList.remove('hidden');
-        }
-
-        function closeStatusModal() {
-            document.getElementById('status-modal').classList.add('hidden');
-        }
-
-        async function saveStatusUpdate() {
-            const reportId = Number(document.getElementById('status-report-id').value);
-            const newStatus = document.getElementById('status-select').value;
-            const resolver = document.getElementById('status-resolver').value.trim();
-            const actionNote = document.getElementById('status-action-note').value.trim();
-            const btnSave = document.getElementById('btn-save-status');
-
-            const idx = reportsDB.findIndex(r => r.id === reportId);
-            if (idx !== -1) {
-                if (btnSave) {
-                    btnSave.disabled = true;
-                    btnSave.innerText = "⏳ กำลังบันทึก...";
-                }
-                const now = new Date();
-                const timestamp = `${now.toISOString().split('T')[0]} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')} น.`;
-                reportsDB[idx].status = newStatus;
-                reportsDB[idx].resolver = resolver;
-                reportsDB[idx].actionNote = actionNote;
-                reportsDB[idx].actionUpdatedAt = timestamp;
-                localStorage.setItem('lab_reports', JSON.stringify(reportsDB));
-
-                const res = await postToGoogleSheet({
-                    action: 'updateReportStatus',
-                    data: { id: reportId, status: newStatus, resolver, actionNote, actionUpdatedAt: timestamp }
-                });
-
-                if (btnSave) {
-                    btnSave.disabled = false;
-                    btnSave.innerText = "บันทึกผล";
-                }
-                closeStatusModal();
-                renderReports();
-                if (googleConfig.scriptUrl && (!res || res.status !== 'success')) {
-                    showModal("แจ้งเตือนการซิงค์", "อัปเดตในหน้าจอแล้ว แต่ไม่สามารถส่งไปที่ Google Sheet ได้ กรุณาตรวจสอบการเชื่อมต่อ");
-                }
-            }
-        }
-
-        function deleteReport(id) {
-            showConfirmModal("ยืนยันการลบ", "คุณต้องการลบรายการแจ้งซ่อมนี้ใช่หรือไม่? (จะลบออกจาก Google Sheet ทันที)", async () => {
-                reportsDB = reportsDB.filter(r => r.id !== id);
-                localStorage.setItem('lab_reports', JSON.stringify(reportsDB));
-                renderReports();
-                await postToGoogleSheet({ action: 'deleteReport', id: id });
-            });
-        }
-
-        function openImageModal(src, caption) {
-            document.getElementById('lightbox-img').src = src;
-            document.getElementById('lightbox-caption').innerText = caption;
-            document.getElementById('image-preview-modal').classList.remove('hidden');
-        }
-
-        function closeImageModal() {
-            document.getElementById('image-preview-modal').classList.add('hidden');
-        }
-
-        // ==================== การตั้งค่าระบบ (Settings) ====================
-
-        function updateStudentCount() {
-            const countEl = document.getElementById('total-students-count');
-            if (countEl) {
-                countEl.innerText = studentsDB.length;
-            }
-        }
-
-        function importStudentsCSV(event) {
-            const file = event.target.files[0];
-            if (!file) return;
-            const reader = new FileReader();
-            reader.onload = function(e) {
-                const lines = e.target.result.split(/\r?\n/).filter(line => line.trim() !== '');
-                const imported = [];
-                lines.forEach((line, index) => {
-                    const cols = line.split(',').map(c => c.trim());
-                    if (cols.length >= 4 && !(index === 0 && cols[0].includes('รหัส'))) {
-                        imported.push({ id: cols[0], name: cols[1], room: cols[2], no: cols[3] });
-                    }
-                });
-                if (imported.length > 0) {
-                    studentsDB = imported;
-                    localStorage.setItem('lab_students', JSON.stringify(studentsDB));
-                    updateStudentCount();
-                    syncMasterDataToSheet();
-                    showModal("นำเข้าสำเร็จ", `นำเข้าข้อมูลนักเรียนจำนวน ${imported.length} คนเรียบร้อยแล้ว`);
-                } else {
-                    showModal("รูปแบบไฟล์ไม่ถูกต้อง", "ไม่พบข้อมูลนักเรียนที่ถูกต้อง กรุณาตรวจสอบรูปแบบคอลัมน์ CSV");
-                }
-            };
-            reader.readAsText(file, 'UTF-8');
-        }
-
-        function loadGoogleConfigInputs() {
-            document.getElementById('cfg-script-url').value = googleConfig.scriptUrl || '';
-            document.getElementById('cfg-sheet-id').value = googleConfig.sheetId || '';
-            document.getElementById('cfg-drive-folder').value = googleConfig.driveFolderId || '';
-        }
-
-        function saveGoogleConfig() {
-            googleConfig = {
-                scriptUrl: document.getElementById('cfg-script-url').value.trim(),
-                sheetId: extractGoogleId(document.getElementById('cfg-sheet-id').value),
-                driveFolderId: extractGoogleId(document.getElementById('cfg-drive-folder').value)
-            };
-            localStorage.setItem('lab_google_cfg', JSON.stringify(googleConfig));
-            loadGoogleConfigInputs();
-            if (googleConfig.scriptUrl) {
-                fetchFromGoogleSheet(true);
-                startAutoRealtimeSync();
-            } else {
-                if (autoSyncTimer) clearInterval(autoSyncTimer);
-                showModal("บันทึกสำเร็จ", "บันทึกการตั้งค่าเรียบร้อยแล้ว (โหมดออฟไลน์)");
-            }
-        }
-
-        async function syncMasterDataToSheet(showNotify = true) {
-            if (!googleConfig.scriptUrl) return;
-            const res = await postToGoogleSheet({
-                action: 'syncMasterData',
-                data: {
-                    students: studentsDB,
-                    issues: issueItemsDB,
-                    subjects: subjectsDB,
-                    adminPassword: adminPassword
-                }
-            });
-            if (showNotify) {
-                if (res && res.status === 'success') {
-                    showModal("อัปโหลดสำเร็จ", "ซิงค์ข้อมูลรายชื่อนักเรียน รายการปัญหา และรายวิชาขึ้น Google Sheets เรียบร้อยแล้ว");
-                } else {
-                    showModal("เกิดข้อผิดพลาด", "ไม่สามารถอัปโหลดข้อมูลขึ้น Google Sheets ได้ กรุณาตรวจสอบ Web App URL");
-                }
-            }
-        }
-
-        function renderSettingsIssueList() {
-            const ul = document.getElementById('settings-issue-list');
-            ul.innerHTML = '';
-            issueItemsDB.forEach((item, index) => {
-                ul.innerHTML += `
-                    <li class="flex items-center justify-between gap-2 bg-white p-2 rounded-lg border border-slate-200 text-xs">
-                        <span class="text-slate-700">${item}</span>
-                        <div class="flex gap-1 shrink-0">
-                            <button type="button" onclick="editIssueItem(${index})" class="px-2 py-1 bg-amber-100 text-amber-800 rounded hover:bg-amber-200">แก้ไข</button>
-                            <button type="button" onclick="deleteIssueItem(${index})" class="px-2 py-1 bg-rose-100 text-rose-700 rounded hover:bg-rose-200">ลบ</button>
-                        </div>
-                    </li>
-                `;
-            });
-        }
-
+// ... existing code ... -->
         async function addIssueItem() {
             const input = document.getElementById('new-issue-input');
             const val = input.value.trim();
@@ -1286,47 +535,36 @@
             input.value = '';
             renderSettingsIssueList();
             renderChecklistCheckboxes();
-            await syncMasterDataToSheet(false);
+            await postToGoogleSheet({ action: 'manageListItem', target: 'issues', operation: 'add', value: val });
         }
 
         function editIssueItem(index) {
-            showPromptModal("แก้ไขรายการปัญหา", "ระบุชื่อรายการปัญหาใหม่:", issueItemsDB[index], async (newVal) => {
+            const oldVal = issueItemsDB[index];
+            showPromptModal("แก้ไขรายการปัญหา", "ระบุชื่อรายการปัญหาใหม่:", oldVal, async (newVal) => {
                 if (newVal && newVal.trim()) {
-                    issueItemsDB[index] = newVal.trim();
+                    const trimmed = newVal.trim();
+                    issueItemsDB[index] = trimmed;
                     localStorage.setItem('lab_issues', JSON.stringify(issueItemsDB));
                     renderSettingsIssueList();
                     renderChecklistCheckboxes();
-                    await syncMasterDataToSheet(false);
+                    await postToGoogleSheet({ action: 'manageListItem', target: 'issues', operation: 'edit', oldValue: oldVal, newValue: trimmed });
                 }
             });
         }
 
         function deleteIssueItem(index) {
-            showConfirmModal("ลบรายการปัญหา", `ต้องการลบ "${issueItemsDB[index]}" ใช่หรือไม่?`, async () => {
+            const targetVal = issueItemsDB[index];
+            showConfirmModal("ลบรายการปัญหา", `ต้องการลบ "${targetVal}" ใช่หรือไม่?`, async () => {
                 issueItemsDB.splice(index, 1);
                 localStorage.setItem('lab_issues', JSON.stringify(issueItemsDB));
                 renderSettingsIssueList();
                 renderChecklistCheckboxes();
-                await syncMasterDataToSheet(false);
+                await postToGoogleSheet({ action: 'manageListItem', target: 'issues', operation: 'delete', value: targetVal });
             });
         }
 
         function renderSettingsSubjectList() {
-            const ul = document.getElementById('settings-subject-list');
-            ul.innerHTML = '';
-            subjectsDB.forEach((subj, index) => {
-                ul.innerHTML += `
-                    <li class="flex items-center justify-between gap-2 bg-white p-2 rounded-lg border border-slate-200 text-xs">
-                        <span class="text-slate-700">${subj}</span>
-                        <div class="flex gap-1 shrink-0">
-                            <button type="button" onclick="editSubject(${index})" class="px-2 py-1 bg-amber-100 text-amber-800 rounded hover:bg-amber-200">แก้ไข</button>
-                            <button type="button" onclick="deleteSubject(${index})" class="px-2 py-1 bg-rose-100 text-rose-700 rounded hover:bg-rose-200">ลบ</button>
-                        </div>
-                    </li>
-                `;
-            });
-        }
-
+// ... existing code ... -->
         async function addSubject() {
             const input = document.getElementById('new-subject-input');
             const val = input.value.trim();
@@ -1336,140 +574,33 @@
             input.value = '';
             renderSettingsSubjectList();
             renderSubjectDropdown();
-            await syncMasterDataToSheet(false);
+            await postToGoogleSheet({ action: 'manageListItem', target: 'subjects', operation: 'add', value: val });
         }
 
         function editSubject(index) {
-            showPromptModal("แก้ไขรายวิชา", "ระบุรหัสวิชาและชื่อวิชาใหม่:", subjectsDB[index], async (newVal) => {
+            const oldVal = subjectsDB[index];
+            showPromptModal("แก้ไขรายวิชา", "ระบุรหัสวิชาและชื่อวิชาใหม่:", oldVal, async (newVal) => {
                 if (newVal && newVal.trim()) {
-                    subjectsDB[index] = newVal.trim();
+                    const trimmed = newVal.trim();
+                    subjectsDB[index] = trimmed;
                     localStorage.setItem('lab_subjects', JSON.stringify(subjectsDB));
                     renderSettingsSubjectList();
                     renderSubjectDropdown();
-                    await syncMasterDataToSheet(false);
+                    await postToGoogleSheet({ action: 'manageListItem', target: 'subjects', operation: 'edit', oldValue: oldVal, newValue: trimmed });
                 }
             });
         }
 
         function deleteSubject(index) {
-            showConfirmModal("ลบรายวิชา", `ต้องการลบรายวิชา "${subjectsDB[index]}" ใช่หรือไม่?`, async () => {
+            const targetVal = subjectsDB[index];
+            showConfirmModal("ลบรายวิชา", `ต้องการลบรายวิชา "${targetVal}" ใช่หรือไม่?`, async () => {
                 subjectsDB.splice(index, 1);
                 localStorage.setItem('lab_subjects', JSON.stringify(subjectsDB));
                 renderSettingsSubjectList();
                 renderSubjectDropdown();
-                await syncMasterDataToSheet(false);
+                await postToGoogleSheet({ action: 'manageListItem', target: 'subjects', operation: 'delete', value: targetVal });
             });
         }
 
         function exportBackupJSON() {
-            const backup = {
-                students: studentsDB,
-                issues: issueItemsDB,
-                subjects: subjectsDB,
-                reports: reportsDB,
-                config: googleConfig,
-                exportedAt: new Date().toISOString()
-            };
-            const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `lab_system_backup_${new Date().toISOString().slice(0, 10)}.json`;
-            a.click();
-            URL.revokeObjectURL(url);
-        }
-
-        function restoreBackupJSON(event) {
-            const file = event.target.files[0];
-            if (!file) return;
-            const reader = new FileReader();
-            reader.onload = function(e) {
-                try {
-                    const data = JSON.parse(e.target.result);
-                    if (data.students) studentsDB = data.students;
-                    if (data.issues) issueItemsDB = data.issues;
-                    if (data.subjects) subjectsDB = data.subjects;
-                    if (data.reports) reportsDB = data.reports;
-                    if (data.config) googleConfig = data.config;
-
-                    localStorage.setItem('lab_students', JSON.stringify(studentsDB));
-                    localStorage.setItem('lab_issues', JSON.stringify(issueItemsDB));
-                    localStorage.setItem('lab_subjects', JSON.stringify(subjectsDB));
-                    localStorage.setItem('lab_reports', JSON.stringify(reportsDB));
-                    localStorage.setItem('lab_google_cfg', JSON.stringify(googleConfig));
-
-                    updateStudentCount();
-                    renderChecklistCheckboxes();
-                    renderSubjectDropdown();
-                    renderSettingsIssueList();
-                    renderSettingsSubjectList();
-                    loadGoogleConfigInputs();
-                    showModal("กู้คืนข้อมูลสำเร็จ", "นำเข้าข้อมูลสำรองกลับเข้าสู่ระบบเรียบร้อยแล้ว");
-                } catch (err) {
-                    showModal("ข้อผิดพลาด", "ไฟล์สำรองข้อมูลไม่ถูกต้องหรือเสียหาย");
-                }
-            };
-            reader.readAsText(file);
-        }
-
-        function confirmClearAllReports() {
-            showConfirmModal("ล้างข้อมูลประวัติในเครื่อง", "ต้องการลบประวัติการแจ้งซ่อมในหน่วยความจำเครื่องใช่หรือไม่? (หากต้องการล้างใน Google Sheet ให้กดผ่านเมนูใน Google Sheet)", () => {
-                reportsDB = [];
-                localStorage.setItem('lab_reports', JSON.stringify(reportsDB));
-                showModal("ล้างข้อมูลเรียบร้อย", "ลบประวัติการแจ้งซ่อมในเครื่องเรียบร้อยแล้ว");
-            });
-        }
-
-        // ==================== ระบบ Modal กลาง ====================
-
-        function showModal(title, msg) {
-            document.getElementById('modal-title').innerText = title;
-            document.getElementById('modal-message').innerText = msg;
-            document.getElementById('modal-input-container').classList.add('hidden');
-            document.getElementById('modal-cancel-btn').classList.add('hidden');
-            const confirmBtn = document.getElementById('modal-confirm-btn');
-            confirmBtn.innerText = "ตกลง";
-            confirmBtn.onclick = closeModal;
-            document.getElementById('custom-modal').classList.remove('hidden');
-        }
-
-        function showConfirmModal(title, msg, onConfirm) {
-            document.getElementById('modal-title').innerText = title;
-            document.getElementById('modal-message').innerText = msg;
-            document.getElementById('modal-input-container').classList.add('hidden');
-            document.getElementById('modal-cancel-btn').classList.remove('hidden');
-            const confirmBtn = document.getElementById('modal-confirm-btn');
-            confirmBtn.innerText = "ยืนยัน";
-            confirmBtn.onclick = () => {
-                closeModal();
-                if (onConfirm) onConfirm();
-            };
-            document.getElementById('custom-modal').classList.remove('hidden');
-        }
-
-        function showPromptModal(title, msg, defaultValue, onSave, inputType = "text") {
-            document.getElementById('modal-title').innerText = title;
-            document.getElementById('modal-message').innerText = msg;
-            const inputContainer = document.getElementById('modal-input-container');
-            const input = document.getElementById('modal-input');
-            input.type = inputType;
-            input.value = defaultValue || '';
-            inputContainer.classList.remove('hidden');
-            document.getElementById('modal-cancel-btn').classList.remove('hidden');
-            const confirmBtn = document.getElementById('modal-confirm-btn');
-            confirmBtn.innerText = "บันทึก";
-            confirmBtn.onclick = () => {
-                const val = input.value;
-                closeModal();
-                if (onSave) onSave(val);
-            };
-            document.getElementById('custom-modal').classList.remove('hidden');
-            setTimeout(() => input.focus(), 50);
-        }
-
-        function closeModal() {
-            document.getElementById('custom-modal').classList.add('hidden');
-        }
-    </script>
-</body>
-</html>
+// ... existing code ... -->
