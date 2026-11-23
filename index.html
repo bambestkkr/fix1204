@@ -1,19 +1,18 @@
 <!DOCTYPE html>
 <html lang="th">
 <head>
-     <!-- เริ่มต้นส่วนตั้งค่า PWA / ไอคอนบนมือถือ -->
-        <link rel="manifest" href="./manifest.json">
-        <meta name="theme-color" content="#1a73e8">
-
-        <meta name="apple-mobile-web-app-capable" content="yes">
-        <meta name="apple-mobile-web-app-status-bar-style" content="default">
-        <meta name="apple-mobile-web-app-title" content="Fix1204">
-        <link rel="apple-touch-icon" href="./icon-192x192.png">
-      <!-- สิ้นสุดส่วนตั้งค่า PWA / ไอคอนบนมือถือ -->
-    
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ระบบแจ้งซ่อม 1204</title>
+    <!-- เริ่มต้นส่วนตั้งค่า PWA / ไอคอนบนมือถือ -->
+    <link rel="manifest" href="./manifest.json">
+    <meta name="theme-color" content="#1a73e8">
+
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="Fix1204">
+    <link rel="apple-touch-icon" href="./icon-192x192.png">
+    <!-- สิ้นสุดส่วนตั้งค่า PWA / ไอคอนบนมือถือ -->
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
@@ -26,7 +25,6 @@
             touch-action: manipulation;
         }
     </style>
-   
 </head>
 <body class="text-slate-700 min-h-screen flex flex-col">
 
@@ -161,6 +159,7 @@
                         <div id="evidence-preview-container" class="grid grid-cols-3 gap-3 pt-2"></div>
                     </div>
 
+                    <!-- รายละเอียดปัญหาเพิ่มเติม -->
                     <div>
                         <label class="block text-sm font-semibold text-slate-600 mb-1">รายละเอียดปัญหาเพิ่มเติม / อาการที่พบ</label>
                         <textarea id="issue-notes" rows="2" placeholder="ระบุรายละเอียดเพิ่มเติม เช่น ปุ่ม Shift กดไม่ติด, เมาส์คลิกซ้ายไม่ได้, มีขยะใต้โต๊ะ..." class="w-full bg-slate-50/70 border border-purple-200 rounded-2xl px-3.5 py-2 text-sm focus:ring-2 focus:ring-purple-400 focus:bg-white focus:outline-none"></textarea>
@@ -386,7 +385,7 @@
             </div>
             <div class="flex justify-end gap-2 pt-2">
                 <button type="button" onclick="closeStatusModal()" class="px-4 py-2.5 rounded-2xl border border-slate-200 bg-slate-100 text-slate-600 text-sm font-semibold hover:bg-slate-200 transition">ยกเลิก</button>
-                <button type="button" onclick="saveStatusUpdate()" class="px-5 py-2.5 rounded-2xl bg-gradient-to-r from-indigo-500 to-purple-500 text-white text-sm font-bold hover:opacity-95 shadow-sm transition">บันทึกผล</button>
+                <button type="button" id="btn-save-status" onclick="saveStatusUpdate()" class="px-5 py-2.5 rounded-2xl bg-gradient-to-r from-indigo-500 to-purple-500 text-white text-sm font-bold hover:opacity-95 shadow-sm transition">บันทึกผล</button>
             </div>
         </div>
     </div>
@@ -442,6 +441,8 @@
         let currentEvidenceImages = [];
         let adminPassword = localStorage.getItem('lab_admin_pass') || '1234';
         let isAdminLoggedIn = false;
+        let autoSyncTimer = null;
+        let isSyncingNow = false;
 
         window.onload = function() {
             initPCSelectOptions();
@@ -453,20 +454,36 @@
             updateStudentCount();
             if (googleConfig.scriptUrl) {
                 fetchFromGoogleSheet(false);
+                startAutoRealtimeSync();
             }
         };
 
+        // ระบบดึงข้อมูลอัตโนมัติแบบ Real-Time Polling ทุก 15 วินาที
+        function startAutoRealtimeSync() {
+            if (autoSyncTimer) clearInterval(autoSyncTimer);
+            autoSyncTimer = setInterval(() => {
+                if (googleConfig.scriptUrl && !isSyncingNow && !document.hidden) {
+                    fetchFromGoogleSheet(false, true);
+                }
+            }, 15000);
+        }
+
         // เชื่อมต่อ API Google Apps Script (GET)
-        async function fetchFromGoogleSheet(showNotify = false) {
-            if (!googleConfig.scriptUrl) return;
+        async function fetchFromGoogleSheet(showNotify = false, isSilent = false) {
+            if (!googleConfig.scriptUrl || isSyncingNow) return;
+            isSyncingNow = true;
             const badge = document.getElementById('sync-status-badge');
-            badge.innerText = "กำลังซิงค์ข้อมูล...";
+            if (!isSilent) badge.innerText = "กำลังซิงค์ข้อมูล...";
             try {
                 const queryParams = new URLSearchParams({
                     action: 'getAllData',
-                    sheetId: extractGoogleId(googleConfig.sheetId || '')
+                    sheetId: extractGoogleId(googleConfig.sheetId || ''),
+                    _t: Date.now()
                 });
-                const res = await fetch(`${googleConfig.scriptUrl}?${queryParams.toString()}`);
+                const res = await fetch(`${googleConfig.scriptUrl}?${queryParams.toString()}`, {
+                    method: 'GET',
+                    redirect: 'follow'
+                });
                 const json = await res.json();
                 if (json.status === 'success' && json.data) {
                     if (json.data.students && json.data.students.length > 0) {
@@ -486,6 +503,10 @@
                         localStorage.setItem('lab_reports', JSON.stringify(reportsDB));
                     }
                     if (json.data.config) {
+                        if (json.data.config.adminPassword) {
+                            adminPassword = String(json.data.config.adminPassword);
+                            localStorage.setItem('lab_admin_pass', adminPassword);
+                        }
                         if (!googleConfig.sheetId && json.data.config.sheetId) googleConfig.sheetId = json.data.config.sheetId;
                         if (!googleConfig.driveFolderId && json.data.config.driveFolderId) googleConfig.driveFolderId = json.data.config.driveFolderId;
                         localStorage.setItem('lab_google_cfg', JSON.stringify(googleConfig));
@@ -498,7 +519,11 @@
                         populateRoomFilter();
                         renderReports();
                     }
-                    badge.innerText = "🟢 เชื่อมต่อ Google Sheet";
+                    if (!document.getElementById('tab-settings').classList.contains('hidden')) {
+                        renderSettingsIssueList();
+                        renderSettingsSubjectList();
+                    }
+                    badge.innerText = "🟢 Real-Time Google Sheet";
                     if (showNotify) showModal("ซิงค์สำเร็จ", "ดึงข้อมูลล่าสุดจาก Google Sheets เรียบร้อยแล้ว");
                 } else {
                     badge.innerText = "⚠️ ตรวจสอบ Sheet ID";
@@ -507,6 +532,8 @@
             } catch (err) {
                 badge.innerText = "⚠️ ออฟไลน์ (Local)";
                 if (showNotify) showModal("ไม่สามารถเชื่อมต่อได้", "ตรวจสอบ Web App URL หรือการตั้งค่าสิทธิ์การเข้าถึง (Anyone)");
+            } finally {
+                isSyncingNow = false;
             }
         }
 
@@ -518,9 +545,13 @@
             return match ? match[0] : trimmed;
         }
 
-        // ส่งข้อมูลไปยัง Google Apps Script (POST)
+        // ส่งข้อมูลไปยัง Google Apps Script แบบ Real-Time (POST)
         async function postToGoogleSheet(payload) {
-            if (!googleConfig.scriptUrl) return null;
+            if (!googleConfig.scriptUrl) return { status: 'offline' };
+            const badge = document.getElementById('sync-status-badge');
+            const prevBadgeText = badge.innerText;
+            badge.innerText = "⏳ กำลังบันทึก Real-Time...";
+            isSyncingNow = true;
             try {
                 const enrichedPayload = {
                     ...payload,
@@ -529,12 +560,25 @@
                 };
                 const res = await fetch(googleConfig.scriptUrl, {
                     method: 'POST',
+                    redirect: 'follow',
+                    headers: {
+                        'Content-Type': 'text/plain;charset=utf-8'
+                    },
                     body: JSON.stringify(enrichedPayload)
                 });
-                return await res.json();
+                const json = await res.json();
+                if (json && json.status === 'success') {
+                    badge.innerText = "🟢 Real-Time Google Sheet";
+                } else {
+                    badge.innerText = "⚠️ บันทึกไม่สำเร็จ";
+                }
+                return json;
             } catch (err) {
                 console.error("Google Sheet POST Error:", err);
-                return null;
+                badge.innerText = prevBadgeText.includes('Real-Time') ? "⚠️ การเชื่อมต่อขัดข้อง" : prevBadgeText;
+                return { status: 'error', message: err.toString() };
+            } finally {
+                isSyncingNow = false;
             }
         }
 
@@ -652,7 +696,7 @@
             showModal("ออกจากระบบ", "ออกจากโหมดผู้ดูแลระบบเรียบร้อยแล้ว");
         }
 
-        function changeAdminPassword() {
+        async function changeAdminPassword() {
             const oldPass = document.getElementById('old-admin-pass').value;
             const newPass = document.getElementById('new-admin-pass').value.trim();
             const confirmPass = document.getElementById('confirm-admin-pass').value.trim();
@@ -675,8 +719,8 @@
             document.getElementById('old-admin-pass').value = '';
             document.getElementById('new-admin-pass').value = '';
             document.getElementById('confirm-admin-pass').value = '';
-            syncMasterDataToSheet();
-            showModal("สำเร็จ", "เปลี่ยนรหัสผ่านผู้ดูแลระบบเรียบร้อยแล้ว");
+            await syncMasterDataToSheet(false);
+            showModal("สำเร็จ", "เปลี่ยนรหัสผ่านผู้ดูแลระบบและบันทึกลง Google Sheet เรียบร้อยแล้ว");
         }
 
         function printReportA4() {
@@ -916,7 +960,7 @@
                 evidenceImages: [...currentEvidenceImages]
             };
 
-            // ส่งขึ้น Google Sheets & Google Drive หากตั้งค่า URL ไว้
+            // ส่งขึ้น Google Sheets & Google Drive แบบ Real-Time
             const apiRes = await postToGoogleSheet({ action: 'submitReport', data: newReport });
             const savedReport = (apiRes && apiRes.report) ? apiRes.report : newReport;
 
@@ -926,7 +970,13 @@
             btnSubmit.disabled = false;
             btnSubmit.innerText = "📨 ส่งรายงานแจ้งซ่อม";
 
-            showModal("ส่งรายงานสำเร็จ", `บันทึกข้อมูลแจ้งซ่อมสำหรับ ${pcNumber} เรียบร้อยแล้ว ขอบคุณที่ช่วยดูแลห้องปฏิบัติการคอมพิวเตอร์`);
+            if (!googleConfig.scriptUrl) {
+                showModal("ส่งรายงานสำเร็จ (ออฟไลน์)", `บันทึกข้อมูลแจ้งซ่อมสำหรับ ${pcNumber} ในเครื่องเรียบร้อยแล้ว (ยังไม่ได้เชื่อมต่อ Google Sheet)`);
+            } else if (apiRes && apiRes.status === 'success') {
+                showModal("บันทึก Real-Time สำเร็จ", `ส่งข้อมูลแจ้งซ่อมและอัปโหลดภาพหลักฐานสำหรับ ${pcNumber} ลง Google Sheet และ Google Drive เรียบร้อยแล้ว`);
+            } else {
+                showModal("บันทึกสำรองในเครื่องแล้ว", `ไม่สามารถส่งขึ้น Google Sheet ได้ในขณะนี้ (${apiRes?.message || 'ตรวจสอบการเชื่อมต่อ'}) ระบบได้บันทึกสำรองไว้ในเครื่องแล้ว`);
+            }
             resetCheckinForm();
         }
 
@@ -1081,9 +1131,14 @@
             const newStatus = document.getElementById('status-select').value;
             const resolver = document.getElementById('status-resolver').value.trim();
             const actionNote = document.getElementById('status-action-note').value.trim();
+            const btnSave = document.getElementById('btn-save-status');
 
             const idx = reportsDB.findIndex(r => r.id === reportId);
             if (idx !== -1) {
+                if (btnSave) {
+                    btnSave.disabled = true;
+                    btnSave.innerText = "⏳ กำลังบันทึก...";
+                }
                 const now = new Date();
                 const timestamp = `${now.toISOString().split('T')[0]} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')} น.`;
                 reportsDB[idx].status = newStatus;
@@ -1092,22 +1147,29 @@
                 reportsDB[idx].actionUpdatedAt = timestamp;
                 localStorage.setItem('lab_reports', JSON.stringify(reportsDB));
 
-                await postToGoogleSheet({
+                const res = await postToGoogleSheet({
                     action: 'updateReportStatus',
                     data: { id: reportId, status: newStatus, resolver, actionNote, actionUpdatedAt: timestamp }
                 });
 
+                if (btnSave) {
+                    btnSave.disabled = false;
+                    btnSave.innerText = "บันทึกผล";
+                }
                 closeStatusModal();
                 renderReports();
+                if (googleConfig.scriptUrl && (!res || res.status !== 'success')) {
+                    showModal("แจ้งเตือนการซิงค์", "อัปเดตในหน้าจอแล้ว แต่ไม่สามารถส่งไปที่ Google Sheet ได้ กรุณาตรวจสอบการเชื่อมต่อ");
+                }
             }
         }
 
         function deleteReport(id) {
-            showConfirmModal("ยืนยันการลบ", "คุณต้องการลบรายการแจ้งซ่อมนี้ใช่หรือไม่?", async () => {
+            showConfirmModal("ยืนยันการลบ", "คุณต้องการลบรายการแจ้งซ่อมนี้ใช่หรือไม่? (จะลบออกจาก Google Sheet ทันที)", async () => {
                 reportsDB = reportsDB.filter(r => r.id !== id);
                 localStorage.setItem('lab_reports', JSON.stringify(reportsDB));
-                await postToGoogleSheet({ action: 'deleteReport', id: id });
                 renderReports();
+                await postToGoogleSheet({ action: 'deleteReport', id: id });
             });
         }
 
@@ -1172,14 +1234,16 @@
             loadGoogleConfigInputs();
             if (googleConfig.scriptUrl) {
                 fetchFromGoogleSheet(true);
+                startAutoRealtimeSync();
             } else {
+                if (autoSyncTimer) clearInterval(autoSyncTimer);
                 showModal("บันทึกสำเร็จ", "บันทึกการตั้งค่าเรียบร้อยแล้ว (โหมดออฟไลน์)");
             }
         }
 
-        async function syncMasterDataToSheet() {
+        async function syncMasterDataToSheet(showNotify = true) {
             if (!googleConfig.scriptUrl) return;
-            await postToGoogleSheet({
+            const res = await postToGoogleSheet({
                 action: 'syncMasterData',
                 data: {
                     students: studentsDB,
@@ -1188,7 +1252,13 @@
                     adminPassword: adminPassword
                 }
             });
-            showModal("อัปโหลดสำเร็จ", "ซิงค์ข้อมูลรายชื่อนักเรียน รายการปัญหา และรายวิชาขึ้น Google Sheets เรียบร้อยแล้ว");
+            if (showNotify) {
+                if (res && res.status === 'success') {
+                    showModal("อัปโหลดสำเร็จ", "ซิงค์ข้อมูลรายชื่อนักเรียน รายการปัญหา และรายวิชาขึ้น Google Sheets เรียบร้อยแล้ว");
+                } else {
+                    showModal("เกิดข้อผิดพลาด", "ไม่สามารถอัปโหลดข้อมูลขึ้น Google Sheets ได้ กรุณาตรวจสอบ Web App URL");
+                }
+            }
         }
 
         function renderSettingsIssueList() {
@@ -1207,7 +1277,7 @@
             });
         }
 
-        function addIssueItem() {
+        async function addIssueItem() {
             const input = document.getElementById('new-issue-input');
             const val = input.value.trim();
             if (!val) return;
@@ -1216,28 +1286,28 @@
             input.value = '';
             renderSettingsIssueList();
             renderChecklistCheckboxes();
-            syncMasterDataToSheet();
+            await syncMasterDataToSheet(false);
         }
 
         function editIssueItem(index) {
-            showPromptModal("แก้ไขรายการปัญหา", "ระบุชื่อรายการปัญหาใหม่:", issueItemsDB[index], (newVal) => {
+            showPromptModal("แก้ไขรายการปัญหา", "ระบุชื่อรายการปัญหาใหม่:", issueItemsDB[index], async (newVal) => {
                 if (newVal && newVal.trim()) {
                     issueItemsDB[index] = newVal.trim();
                     localStorage.setItem('lab_issues', JSON.stringify(issueItemsDB));
                     renderSettingsIssueList();
                     renderChecklistCheckboxes();
-                    syncMasterDataToSheet();
+                    await syncMasterDataToSheet(false);
                 }
             });
         }
 
         function deleteIssueItem(index) {
-            showConfirmModal("ลบรายการปัญหา", `ต้องการลบ "${issueItemsDB[index]}" ใช่หรือไม่?`, () => {
+            showConfirmModal("ลบรายการปัญหา", `ต้องการลบ "${issueItemsDB[index]}" ใช่หรือไม่?`, async () => {
                 issueItemsDB.splice(index, 1);
                 localStorage.setItem('lab_issues', JSON.stringify(issueItemsDB));
                 renderSettingsIssueList();
                 renderChecklistCheckboxes();
-                syncMasterDataToSheet();
+                await syncMasterDataToSheet(false);
             });
         }
 
@@ -1257,7 +1327,7 @@
             });
         }
 
-        function addSubject() {
+        async function addSubject() {
             const input = document.getElementById('new-subject-input');
             const val = input.value.trim();
             if (!val) return;
@@ -1266,28 +1336,28 @@
             input.value = '';
             renderSettingsSubjectList();
             renderSubjectDropdown();
-            syncMasterDataToSheet();
+            await syncMasterDataToSheet(false);
         }
 
         function editSubject(index) {
-            showPromptModal("แก้ไขรายวิชา", "ระบุรหัสวิชาและชื่อวิชาใหม่:", subjectsDB[index], (newVal) => {
+            showPromptModal("แก้ไขรายวิชา", "ระบุรหัสวิชาและชื่อวิชาใหม่:", subjectsDB[index], async (newVal) => {
                 if (newVal && newVal.trim()) {
                     subjectsDB[index] = newVal.trim();
                     localStorage.setItem('lab_subjects', JSON.stringify(subjectsDB));
                     renderSettingsSubjectList();
                     renderSubjectDropdown();
-                    syncMasterDataToSheet();
+                    await syncMasterDataToSheet(false);
                 }
             });
         }
 
         function deleteSubject(index) {
-            showConfirmModal("ลบรายวิชา", `ต้องการลบรายวิชา "${subjectsDB[index]}" ใช่หรือไม่?`, () => {
+            showConfirmModal("ลบรายวิชา", `ต้องการลบรายวิชา "${subjectsDB[index]}" ใช่หรือไม่?`, async () => {
                 subjectsDB.splice(index, 1);
                 localStorage.setItem('lab_subjects', JSON.stringify(subjectsDB));
                 renderSettingsSubjectList();
                 renderSubjectDropdown();
-                syncMasterDataToSheet();
+                await syncMasterDataToSheet(false);
             });
         }
 
