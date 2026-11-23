@@ -28,19 +28,19 @@
 </head>
 <body class="text-slate-700 min-h-screen flex flex-col">
 
-    <!-- แถบเมนูนำทางหลัก (Modern Pastel Gradient Header) -->
+    <!-- แถบเมนูนำทางหลัก -->
     <header class="bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 text-white shadow-lg shadow-indigo-200/50 sticky top-0 z-40">
         <div class="max-w-6xl mx-auto px-4 py-3.5 flex flex-wrap items-center justify-between gap-3">
             <div class="flex items-center gap-3">
                 <div class="bg-white/95 backdrop-blur-md p-1.5 rounded-2xl border border-white/40 shadow-sm flex items-center justify-center">
-                    <img src="https://i.ibb.co/GQqkFPsY/jaae-PNGTran-small.png" onerror="this.onerror=null;this.src='https://placehold.co/48x48/6366f1/ffffff?text=1204';" alt="โลโก้ระบบแจ้งซ่อม 1204" class="w-10 h-10 object-contain rounded-xl">
+                    <img src="https://i.ibb.co/GQqkFPsY/jaae-PNGTran-small.png" onerror="this.onerror=null;this.src='https://placehold.co/48x48/6366f1/ffffff?text=1204';" alt="โลโก้ระบบแจ้งซ่อม" class="w-10 h-10 object-contain rounded-xl">
                 </div>
                 <div>
                     <div class="flex items-center gap-2">
-                        <h1 class="text-lg font-bold leading-tight tracking-wide drop-shadow-xs">ระบบแจ้งซ่อม 1204</h1>
+                        <h1 id="header-room-title" class="text-lg font-bold leading-tight tracking-wide drop-shadow-xs">ระบบแจ้งซ่อม 1204</h1>
                         <span id="sync-status-badge" class="text-[11px] bg-white/20 px-2 py-0.5 rounded-full font-medium">โหมดออฟไลน์</span>
                     </div>
-                    <p class="text-xs text-purple-100 font-medium">กลุ่มสาระการเรียนรู้วิทยาศาสตร์และเทคโนโลยี (40 เครื่อง)</p>
+                    <p id="header-room-subtitle" class="text-xs text-purple-100 font-medium">กลุ่มสาระการเรียนรู้วิทยาศาสตร์และเทคโนโลยี (40 เครื่อง)</p>
                 </div>
             </div>
 
@@ -57,7 +57,7 @@
     <!-- พื้นที่เนื้อหาหลัก -->
     <main class="flex-grow max-w-6xl w-full mx-auto px-4 py-6">
 
-        <!-- ==================== TAB 1: แจ้งซ่อม / เช็คลิสต์ (สำหรับนักเรียน) ==================== -->
+        <!-- ==================== TAB 1: แจ้งซ่อม / เช็คลิสต์ ==================== -->
         <section id="tab-checkin" class="space-y-6">
             <div class="bg-gradient-to-r from-amber-50 to-rose-50 border border-rose-200/70 p-4 rounded-2xl shadow-xs flex items-start gap-3.5">
                 <span class="text-2xl bg-white p-1.5 rounded-xl shadow-xs">⚠️</span>
@@ -159,7 +159,6 @@
                         <div id="evidence-preview-container" class="grid grid-cols-3 gap-3 pt-2"></div>
                     </div>
 
-                    <!-- รายละเอียดปัญหาเพิ่มเติม -->
                     <div>
                         <label class="block text-sm font-semibold text-slate-600 mb-1">รายละเอียดปัญหาเพิ่มเติม / อาการที่พบ</label>
                         <textarea id="issue-notes" rows="2" placeholder="ระบุรายละเอียดเพิ่มเติม เช่น ปุ่ม Shift กดไม่ติด, เมาส์คลิกซ้ายไม่ได้, มีขยะใต้โต๊ะ..." class="w-full bg-slate-50/70 border border-purple-200 rounded-2xl px-3.5 py-2 text-sm focus:ring-2 focus:ring-purple-400 focus:bg-white focus:outline-none"></textarea>
@@ -203,7 +202,7 @@
                     <div>
                         <label class="block text-xs font-semibold text-slate-600 mb-1">หมายเลขเครื่อง</label>
                         <select id="filter-pc" onchange="renderReports()" class="w-full bg-white border border-purple-200 rounded-xl px-2.5 py-1.5 text-xs">
-                            <option value="">ทุกเครื่อง (1-40)</option>
+                            <option value="">ทุกเครื่อง</option>
                         </select>
                     </div>
                     <div>
@@ -253,7 +252,7 @@
             <div class="bg-white/90 backdrop-blur-xs p-6 rounded-3xl shadow-sm border border-purple-100 space-y-6">
                 <div class="border-b border-purple-100 pb-3">
                     <h2 class="text-lg font-bold text-indigo-800">⚙️ ตั้งค่าระบบและฐานข้อมูลห้องปฏิบัติการ</h2>
-                    <p class="text-xs text-slate-500">จัดการรายชื่อนักเรียน รายการปัญหา รายวิชา และการเชื่อมต่อ Google Sheets API</p>
+                    <p class="text-xs text-slate-500">จัดการชื่อห้อง จำนวนเครื่อง รายชื่อนักเรียน รายการปัญหา รายวิชา และการเชื่อมต่อฐานข้อมูลจบในหน้าเว็บ</p>
                 </div>
 
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -265,18 +264,28 @@
                         <div class="text-xs text-slate-600">จำนวนนักเรียนในระบบปัจจุบัน: <strong id="total-students-count" class="text-indigo-700">0</strong> คน</div>
                     </div>
 
-                    <!-- 2. ตั้งค่าการเชื่อมต่อ Google Apps Script Web App URL / Sheet ID / Path รูปภาพ -->
+                    <!-- 2. ตั้งค่าห้องปฏิบัติการ & ฐานข้อมูล (จบในหน้าเว็บ) -->
                     <div class="p-5 border border-purple-100 rounded-2xl space-y-3 bg-purple-50/40">
-                        <h3 class="font-bold text-sm text-purple-900">2. ตั้งค่าฐานข้อมูล (Google Sheet ID & Path เก็บรูปภาพ)</h3>
-                        <p class="text-xs text-slate-500">กรณีทำสำเนาไปใช้กับห้องอื่น สามารถเปลี่ยน Sheet ID และโฟลเดอร์เก็บรูปภาพได้ที่นี่</p>
+                        <h3 class="font-bold text-sm text-purple-900">2. ตั้งค่าห้องปฏิบัติการ & ฐานข้อมูล (จบในหน้าเว็บ)</h3>
+                        <p class="text-xs text-slate-500">เปลี่ยนชื่อห้อง จำนวนเครื่อง Sheet ID และโฟลเดอร์เก็บรูปภาพได้ทันทีโดยไม่ต้องแก้โค้ด</p>
                         <div class="space-y-2">
+                            <div class="grid grid-cols-3 gap-2">
+                                <div class="col-span-2">
+                                    <label class="block text-[11px] font-semibold text-purple-800 mb-0.5">ชื่อระบบ / ชื่อห้องปฏิบัติการ</label>
+                                    <input type="text" id="cfg-room-name" placeholder="เช่น ระบบแจ้งซ่อม 1204" class="w-full bg-white border border-purple-200 rounded-xl px-3 py-1.5 text-xs">
+                                </div>
+                                <div>
+                                    <label class="block text-[11px] font-semibold text-purple-800 mb-0.5">จำนวนเครื่อง</label>
+                                    <input type="number" id="cfg-pc-count" min="1" max="100" placeholder="40" class="w-full bg-white border border-purple-200 rounded-xl px-3 py-1.5 text-xs">
+                                </div>
+                            </div>
                             <div>
                                 <label class="block text-[11px] font-semibold text-purple-800 mb-0.5">Apps Script Web App URL (<code class="bg-white px-1 rounded">/exec</code>)</label>
                                 <input type="url" id="cfg-script-url" placeholder="https://script.google.com/macros/s/...../exec" class="w-full bg-white border border-purple-200 rounded-xl px-3 py-1.5 text-xs">
                             </div>
                             <div>
                                 <label class="block text-[11px] font-semibold text-purple-800 mb-0.5">Google Sheet ID (เปลี่ยนฐานข้อมูลห้องอื่น)</label>
-                                <input type="text" id="cfg-sheet-id" placeholder="วาง Sheet ID (เช่น 1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms)" class="w-full bg-white border border-purple-200 rounded-xl px-3 py-1.5 text-xs">
+                                <input type="text" id="cfg-sheet-id" placeholder="วาง Sheet ID หรือลิงก์ Google Sheet" class="w-full bg-white border border-purple-200 rounded-xl px-3 py-1.5 text-xs">
                             </div>
                             <div>
                                 <label class="block text-[11px] font-semibold text-purple-800 mb-0.5">Google Drive Folder ID / Path (โฟลเดอร์เก็บรูปภาพ)</label>
@@ -402,7 +411,6 @@
     </div>
 
     <script>
-        // ข้อมูลเริ่มต้น (กรณี Offline หรือยังไม่ได้เชื่อมต่อ Google Sheets)
         const defaultStudents = [
             { id: "10001", name: "เด็กชายสมชาย ใจดี", room: "ม.1/1", no: "1" },
             { id: "10002", name: "เด็กหญิงสมหญิง รักเรียน", room: "ม.1/1", no: "2" },
@@ -426,14 +434,26 @@
             "ง20201 คอมพิวเตอร์เพิ่มเติม"
         ];
 
-        // สามารถใส่ Web App URL ของ Google Apps Script ที่ Deploy แล้วตรงนี้ได้ทันที (หรือไปกรอกในหน้าตั้งค่า)
         const DEFAULT_SCRIPT_URL = "";
+
+        // ตรวจจับอัตโนมัติว่าหน้าเว็บถูกเปิดผ่าน Google Apps Script Web App โดยตรงหรือไม่
+        const isHostedOnAppsScript = window.location.hostname.includes('script.google.com') || window.location.hostname.includes('googleusercontent.com');
+        const autoDetectedScriptUrl = isHostedOnAppsScript ? window.location.href.split('?')[0] : '';
 
         let studentsDB = JSON.parse(localStorage.getItem('lab_students')) || defaultStudents;
         let issueItemsDB = JSON.parse(localStorage.getItem('lab_issues')) || defaultIssues;
         let subjectsDB = JSON.parse(localStorage.getItem('lab_subjects')) || defaultSubjects;
         let reportsDB = JSON.parse(localStorage.getItem('lab_reports')) || [];
-        let googleConfig = JSON.parse(localStorage.getItem('lab_google_cfg')) || { scriptUrl: DEFAULT_SCRIPT_URL, sheetId: '', driveFolderId: '' };
+        let googleConfig = JSON.parse(localStorage.getItem('lab_google_cfg')) || {
+            scriptUrl: autoDetectedScriptUrl || DEFAULT_SCRIPT_URL,
+            sheetId: '',
+            driveFolderId: '',
+            roomName: 'ระบบแจ้งซ่อม 1204',
+            pcCount: 40
+        };
+        if (autoDetectedScriptUrl && !googleConfig.scriptUrl) {
+            googleConfig.scriptUrl = autoDetectedScriptUrl;
+        }
 
         let selectedStudent = null;
         let webcamStream = null;
@@ -446,6 +466,7 @@
         let lastWriteTimestamp = 0;
 
         window.onload = function() {
+            applyLabBranding();
             initPCSelectOptions();
             initClassPeriods();
             renderSubjectDropdown();
@@ -459,7 +480,16 @@
             }
         };
 
-        // ฟังก์ชันช่วยดึง ID อัตโนมัติกรณีวางเป็นลิงก์ URL เต็มของ Google Sheet หรือ Google Drive
+        function applyLabBranding() {
+            const roomName = googleConfig.roomName || 'ระบบแจ้งซ่อม 1204';
+            const pcCount = Number(googleConfig.pcCount) || 40;
+            document.title = roomName;
+            const titleEl = document.getElementById('header-room-title');
+            const subEl = document.getElementById('header-room-subtitle');
+            if (titleEl) titleEl.innerText = roomName;
+            if (subEl) subEl.innerText = `กลุ่มสาระการเรียนรู้วิทยาศาสตร์และเทคโนโลยี (${pcCount} เครื่อง)`;
+        }
+
         function extractGoogleId(inputStr) {
             if (!inputStr) return '';
             const trimmed = inputStr.trim();
@@ -472,11 +502,9 @@
             return trimmed;
         }
 
-        // ระบบดึงข้อมูลอัตโนมัติแบบ Real-Time Polling ทุก 15 วินาที
         function startAutoRealtimeSync() {
             if (autoSyncTimer) clearInterval(autoSyncTimer);
             autoSyncTimer = setInterval(() => {
-                // ข้ามการดึงข้อมูลอัตโนมัติชั่วคราวหากเพิ่งมีการบันทึกข้อมูลภายใน 10 วินาทีที่ผ่านมา
                 if (Date.now() - lastWriteTimestamp < 10000) return;
                 if (googleConfig.scriptUrl && !isSyncingNow && !document.hidden) {
                     fetchFromGoogleSheet(false, true);
@@ -484,7 +512,6 @@
             }, 15000);
         }
 
-        // เชื่อมต่อ API Google Apps Script (GET)
         async function fetchFromGoogleSheet(showNotify = false, isSilent = false) {
             if (!googleConfig.scriptUrl || isSyncingNow) return;
             const requestStartTime = Date.now();
@@ -502,7 +529,6 @@
                     redirect: 'follow'
                 });
                 const json = await res.json();
-                // หากมีการกดบันทึก/แก้ไขระหว่างที่กำลังโหลด GET อยู่ ให้ยกเลิกการเขียนทับข้อมูลใหม่
                 if (isSilent && lastWriteTimestamp > requestStartTime) {
                     return;
                 }
@@ -542,8 +568,18 @@
                             googleConfig.driveFolderId = json.data.config.driveFolderId;
                             configChanged = true;
                         }
+                        if (json.data.config.roomName && googleConfig.roomName !== json.data.config.roomName) {
+                            googleConfig.roomName = json.data.config.roomName;
+                            configChanged = true;
+                        }
+                        if (json.data.config.pcCount && Number(googleConfig.pcCount) !== Number(json.data.config.pcCount)) {
+                            googleConfig.pcCount = Number(json.data.config.pcCount);
+                            initPCSelectOptions();
+                            configChanged = true;
+                        }
                         if (configChanged) {
                             localStorage.setItem('lab_google_cfg', JSON.stringify(googleConfig));
+                            applyLabBranding();
                             loadGoogleConfigInputs();
                         }
                         if (json.data.config.adminPassword) {
@@ -565,7 +601,6 @@
             }
         }
 
-        // ส่งข้อมูลไปยัง Google Apps Script แบบ Real-Time (POST)
         async function postToGoogleSheet(payload) {
             if (!googleConfig.scriptUrl) return { status: 'offline' };
             lastWriteTimestamp = Date.now();
@@ -607,9 +642,10 @@
         function initPCSelectOptions() {
             const pcSelect = document.getElementById('pc-number');
             const filterPcSelect = document.getElementById('filter-pc');
+            const maxPC = Number(googleConfig.pcCount) || 40;
             pcSelect.innerHTML = '<option value="">-- เลือกหมายเลขเครื่อง --</option>';
-            filterPcSelect.innerHTML = '<option value="">ทุกเครื่อง (1-40)</option>';
-            for (let i = 1; i <= 40; i++) {
+            filterPcSelect.innerHTML = `<option value="">ทุกเครื่อง (1-${maxPC})</option>`;
+            for (let i = 1; i <= maxPC; i++) {
                 const label = `เครื่องที่ ${String(i).padStart(2, '0')}`;
                 pcSelect.innerHTML += `<option value="${label}">${label}</option>`;
                 filterPcSelect.innerHTML += `<option value="${label}">${label}</option>`;
@@ -750,6 +786,8 @@
 
         function printReportA4() {
             const tableBodyHtml = document.getElementById('report-table-body').innerHTML;
+            const roomName = googleConfig.roomName || 'ระบบแจ้งซ่อม 1204';
+            const pcCount = Number(googleConfig.pcCount) || 40;
             const printWin = window.open('', '_blank', 'width=900,height=700');
             if (printWin) {
                 printWin.document.write(`
@@ -757,7 +795,7 @@
                     <html lang="th">
                     <head>
                         <meta charset="UTF-8">
-                        <title>พิมพ์รายงานการตรวจสอบและแจ้งซ่อมอุปกรณ์ห้องปฏิบัติการคอมพิวเตอร์ 1204</title>
+                        <title>พิมพ์รายงานการตรวจสอบและแจ้งซ่อมอุปกรณ์ (${roomName})</title>
                         <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;600;700&display=swap" rel="stylesheet">
                         <style>
                             @page { size: A4 portrait; margin: 15mm; }
@@ -775,8 +813,8 @@
                     </head>
                     <body>
                         <div class="header">
-                            <h1>แบบรายงานการตรวจสอบและแจ้งซ่อมอุปกรณ์ห้องปฏิบัติการคอมพิวเตอร์ 1204</h1>
-                            <p>กลุ่มสาระการเรียนรู้วิทยาศาสตร์และเทคโนโลยี | จำนวนเครื่องคอมพิวเตอร์ 40 เครื่อง</p>
+                            <h1>แบบรายงานการตรวจสอบและแจ้งซ่อมอุปกรณ์ (${roomName})</h1>
+                            <p>กลุ่มสาระการเรียนรู้วิทยาศาสตร์และเทคโนโลยี | จำนวนเครื่องคอมพิวเตอร์ ${pcCount} เครื่อง</p>
                         </div>
                         <table>
                             <thead>
@@ -995,7 +1033,7 @@
             btn.disabled = false;
             btn.innerText = "📨 ส่งรายงานแจ้งซ่อม";
 
-            showModal("ส่งรายงานสำเร็จ", `บันทึกข้อมูลแจ้งซ่อมสำหรับ ${pcNumber} เรียบร้อยแล้ว ขอบคุณที่ช่วยดูแลห้องปฏิบัติการคอมพิวเตอร์ 1204`);
+            showModal("ส่งรายงานสำเร็จ", `บันทึกข้อมูลแจ้งซ่อมสำหรับ ${pcNumber} เรียบร้อยแล้ว ขอบคุณที่ช่วยดูแลห้องปฏิบัติการคอมพิวเตอร์`);
             resetCheckinForm();
         }
 
@@ -1236,28 +1274,34 @@
         }
 
         function loadGoogleConfigInputs() {
+            const roomEl = document.getElementById('cfg-room-name');
+            const pcEl = document.getElementById('cfg-pc-count');
             const urlEl = document.getElementById('cfg-script-url');
             const sheetEl = document.getElementById('cfg-sheet-id');
             const folderEl = document.getElementById('cfg-drive-folder');
+            if (roomEl) roomEl.value = googleConfig.roomName || 'ระบบแจ้งซ่อม 1204';
+            if (pcEl) pcEl.value = googleConfig.pcCount || 40;
             if (urlEl) urlEl.value = googleConfig.scriptUrl || '';
             if (sheetEl) sheetEl.value = googleConfig.sheetId || '';
             if (folderEl) folderEl.value = googleConfig.driveFolderId || '';
         }
 
         async function saveGoogleConfig() {
+            const roomName = document.getElementById('cfg-room-name').value.trim() || 'ระบบแจ้งซ่อม 1204';
+            const pcCount = Number(document.getElementById('cfg-pc-count').value) || 40;
             const scriptUrl = document.getElementById('cfg-script-url').value.trim();
             const sheetId = extractGoogleId(document.getElementById('cfg-sheet-id').value);
             const driveFolderId = extractGoogleId(document.getElementById('cfg-drive-folder').value);
 
-            googleConfig = { scriptUrl, sheetId, driveFolderId };
+            googleConfig = { roomName, pcCount, scriptUrl, sheetId, driveFolderId };
             localStorage.setItem('lab_google_cfg', JSON.stringify(googleConfig));
+            applyLabBranding();
+            initPCSelectOptions();
             loadGoogleConfigInputs();
 
             if (googleConfig.scriptUrl) {
                 startAutoRealtimeSync();
-                if (driveFolderId) {
-                    await postToGoogleSheet({ action: 'syncMasterData', data: {} });
-                }
+                await postToGoogleSheet({ action: 'syncMasterData', data: { roomName, pcCount } });
                 fetchFromGoogleSheet(true);
             } else {
                 if (autoSyncTimer) clearInterval(autoSyncTimer);
@@ -1277,11 +1321,13 @@
                     students: studentsDB,
                     issues: issueItemsDB,
                     subjects: subjectsDB,
-                    adminPassword: adminPassword
+                    adminPassword: adminPassword,
+                    roomName: googleConfig.roomName,
+                    pcCount: googleConfig.pcCount
                 }
             });
             if (res && res.status === 'success') {
-                showModal("ซิงค์ข้อมูลตั้งต้นสำเร็จ", "อัปโหลดรายชื่อนักเรียน รายการปัญหา รายวิชา และโฟลเดอร์เก็บรูปภาพขึ้น Google Sheets เรียบร้อยแล้ว");
+                showModal("ซิงค์ข้อมูลตั้งต้นสำเร็จ", "อัปโหลดรายชื่อนักเรียน รายการปัญหา รายวิชา และค่าตั้งค่าห้องปฏิบัติการขึ้น Google Sheets เรียบร้อยแล้ว");
             } else {
                 showModal("ข้อผิดพลาด", "ไม่สามารถอัปโหลดข้อมูลได้ กรุณาตรวจสอบ Web App URL หรือ Sheet ID");
             }
@@ -1432,6 +1478,8 @@
                     localStorage.setItem('lab_reports', JSON.stringify(reportsDB));
                     localStorage.setItem('lab_google_cfg', JSON.stringify(googleConfig));
 
+                    applyLabBranding();
+                    initPCSelectOptions();
                     updateStudentCount();
                     renderChecklistCheckboxes();
                     renderSubjectDropdown();
